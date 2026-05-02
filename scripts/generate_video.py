@@ -46,6 +46,7 @@ class VideoConfig:
     api_key: str
     endpoint: str
     model: str
+    provider: str = "kling"
     default_duration: int = 5
     default_resolution: str = "720p"
     default_aspect_ratio: str = "16:9"
@@ -80,6 +81,7 @@ def load_config(config_path: Path, project_path: Path, logger: logging.Logger) -
         api_key=video_config.get("apiKey", ""),
         endpoint=endpoint,
         model=video_config.get("model", "kling-v1-pro"),
+        provider=video_config.get("provider", "kling"),
     )
 
 
@@ -269,6 +271,7 @@ def main() -> int:
         api_key=video_config.api_key,
         base_url=video_config.endpoint,
         model=video_config.model,
+        provider=video_config.provider,
         logger=logger,
     )
 

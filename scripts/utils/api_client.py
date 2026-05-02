@@ -203,7 +203,12 @@ class ImageAPIClient(BaseAPIClient):
 
 
 class VideoAPIClient(BaseAPIClient):
-    """Client for video generation APIs."""
+    """Client for video generation APIs supporting Kling and Volcengine Ark."""
+
+    def __init__(self, *args, provider: str = "kling", **kwargs):
+        super().__init__(*args, **kwargs)
+        self.provider = provider.lower()
+        self._is_volcengine = self.provider == "volcengine" or "volces" in self.base_url
 
     def submit(
         self,
@@ -217,25 +222,72 @@ class VideoAPIClient(BaseAPIClient):
         aspect_ratio: str = "16:9",
         camera_fixed: bool = False,
     ) -> str:
-        """Submit a video generation task.
+        """Submit a video generation task."""
+        if self._is_volcengine:
+            return self._submit_volcengine(
+                prompt=prompt,
+                image_url=image_url,
+                start_image_url=start_image_url,
+                end_image_url=end_image_url,
+                duration=duration,
+                aspect_ratio=aspect_ratio,
+            )
+        return self._submit_kling(
+            prompt=prompt,
+            mode=mode,
+            image_url=image_url,
+            start_image_url=start_image_url,
+            end_image_url=end_image_url,
+            duration=duration,
+            resolution=resolution,
+            aspect_ratio=aspect_ratio,
+            camera_fixed=camera_fixed,
+        )
 
-        Args:
-            prompt: Video generation prompt.
-            mode: Generation mode (text, singleImage, startEnd, multiImage).
-            image_url: Single image URL for singleImage mode.
-            start_image_url: Start frame for startEnd mode.
-            end_image_url: End frame for startEnd mode.
-            duration: Video duration in seconds.
-            resolution: Video resolution.
-            aspect_ratio: Aspect ratio.
-            camera_fixed: Whether camera is fixed.
+    def _submit_volcengine(
+        self,
+        prompt: str,
+        image_url: Optional[str] = None,
+        start_image_url: Optional[str] = None,
+        end_image_url: Optional[str] = None,
+        duration: int = 5,
+        aspect_ratio: str = "16:9",
+    ) -> str:
+        """Submit video task to Volcengine Ark API."""
+        content = [{"type": "text", "text": prompt}]
 
-        Returns:
-            Task ID.
+        for url in (image_url, start_image_url, end_image_url):
+            if url:
+                content.append({
+                    "type": "image_url",
+                    "image_url": {"url": url},
+                    "role": "reference_image",
+                })
 
-        Raises:
-            APIError: If submission fails.
-        """
+        payload = {
+            "model": self.model,
+            "content": content,
+            "ratio": aspect_ratio,
+            "duration": duration,
+            "watermark": False,
+        }
+
+        result = self._request("POST", "contents/generations/tasks", data=payload)
+        return result.get("id") or result.get("task_id", "")
+
+    def _submit_kling(
+        self,
+        prompt: str,
+        mode: str = "singleImage",
+        image_url: Optional[str] = None,
+        start_image_url: Optional[str] = None,
+        end_image_url: Optional[str] = None,
+        duration: int = 5,
+        resolution: str = "720p",
+        aspect_ratio: str = "16:9",
+        camera_fixed: bool = False,
+    ) -> str:
+        """Submit video task to Kling API."""
         content = [{"type": "text", "text": prompt}]
 
         if mode in ("singleImage", "text") and image_url:
@@ -259,18 +311,52 @@ class VideoAPIClient(BaseAPIClient):
         return result.get("id") or result.get("task_id", "")
 
     def query_status(self, task_id: str) -> dict:
-        """Query video generation task status.
+        """Query video generation task status."""
+        if self._is_volcengine:
+            return self._query_status_volcengine(task_id)
+        return self._query_status_kling(task_id)
 
-        Args:
-            task_id: Task ID.
+    def _query_status_volcengine(self, task_id: str) -> dict:
+        """Query task status from Volcengine Ark API."""
+        result = self._request("GET", f"contents/generations/tasks/{task_id}")
 
-        Returns:
-            Status dict with 'status' and optionally 'video_url'.
-        """
+        api_status = result.get("status", "").lower()
+        status_map = {
+            "queued": "pending",
+            "running": "processing",
+            "succeeded": "succeeded",
+            "failed": "failed",
+            "error": "failed",
+        }
+
+        status = status_map.get(api_status, "pending")
+        video_url = None
+
+        if status == "succeeded":
+            video_url = (
+                result.get("content", {}).get("video_url")
+                or result.get("video_url")
+                or result.get("url")
+            )
+            if not video_url and "content" in result:
+                content_list = result.get("content", [])
+                if isinstance(content_list, list):
+                    for item in content_list:
+                        if isinstance(item, dict) and item.get("type") == "video_url":
+                            video_url = item.get("video_url", {}).get("url")
+                            break
+
+        return {
+            "status": status,
+            "video_url": video_url,
+            "error": result.get("error") or result.get("message") if status == "failed" else None,
+        }
+
+    def _query_status_kling(self, task_id: str) -> dict:
+        """Query task status from Kling API."""
         result = self._request("GET", f"videos/generations/{task_id}")
 
         api_status = result.get("status", "").lower()
-
         status_map = {
             "pending": "pending",
             "queued": "pending",

@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.1.0 (2026-05-02)
+
+### Features
+- **Volcengine video generation support**: Added full support for Volcengine Ark video generation API (`doubao-seedance-2-0-260128`)
+- **Unified video provider**: Video and image generation now both use `VOLC_API_KEY`
+- **Provider-aware VideoAPIClient**: Automatically switches between Kling and Volcengine API formats
+- **Updated DeepSeek models**: Default text model changed from `deepseek-chat` to `deepseek-v4-pro` (old names deprecated 2026-07-24)
+
+### API Changes
+- Video endpoint: `POST /contents/generations/tasks` (Volcengine)
+- Video query: `GET /contents/generations/tasks/{task_id}` (Volcengine)
+- Image references use `role: "reference_image"` for Volcengine
+
 ## 1.0.0 (2026-05-01)
 
 ### Features

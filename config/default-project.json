@@ -10,7 +10,7 @@
   "models": {
     "text": {
       "provider": "deepseek",
-      "model": "deepseek-chat",
+      "model": "deepseek-v4-pro",
       "apiKey": "${DEEPSEEK_API_KEY}",
       "baseUrl": "https://api.deepseek.com"
     },
@@ -21,10 +21,10 @@
       "baseUrl": "https://ark.cn-beijing.volces.com/api/v3"
     },
     "video": {
-      "provider": "kling",
-      "model": "kling-v1-pro",
-      "apiKey": "${KLING_API_KEY}",
-      "baseUrl": null
+      "provider": "volcengine",
+      "model": "doubao-seedance-2-0-260128",
+      "apiKey": "${VOLC_API_KEY}",
+      "baseUrl": "https://ark.cn-beijing.volces.com/api/v3"
     },
     "audio": {
       "provider": "volcengine",
