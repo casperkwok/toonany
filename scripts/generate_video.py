@@ -54,6 +54,14 @@ class VideoConfig:
     max_retries: int = 3
 
 
+def _resolve_env(value):
+    """Resolve ${ENV_VAR} syntax from environment variables."""
+    if isinstance(value, str) and value.startswith("${") and value.endswith("}"):
+        env_var = value[2:-1]
+        return os.environ.get(env_var, value)
+    return value
+
+
 def load_config(config_path: Path, project_path: Path, logger: logging.Logger) -> VideoConfig:
     """Load video configuration from project.json."""
     project_json = project_path / "project.json"
@@ -78,7 +86,7 @@ def load_config(config_path: Path, project_path: Path, logger: logging.Logger) -
         endpoint = endpoints.get(provider, "")
 
     return VideoConfig(
-        api_key=video_config.get("apiKey", ""),
+        api_key=_resolve_env(video_config.get("apiKey", "")),
         endpoint=endpoint,
         model=video_config.get("model", "kling-v1-pro"),
         provider=video_config.get("provider", "kling"),
@@ -96,7 +104,7 @@ def parse_storyboard(storyboard_path: Path, logger: logging.Logger) -> list[Shot
     for segment_num_str, segment_content in segments:
         segment_num = int(segment_num_str)
 
-        shot_pattern = r"### 分镜(\d+)\n(.*?)(?=\n### |\n## |\Z)"
+        shot_pattern = r"### 分镜(\d+)[:：]?\s*(.*?)(?=\n### |\n## |\Z)"
         shot_matches = re.findall(shot_pattern, segment_content, re.DOTALL)
 
         for shot_num_str, shot_content in shot_matches:

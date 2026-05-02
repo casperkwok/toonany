@@ -16,7 +16,7 @@
     },
     "image": {
       "provider": "volcengine",
-      "model": "doubao-seedream-4-5",
+      "model": "doubao-seedream-4-5-251128",
       "apiKey": "${VOLC_API_KEY}",
       "baseUrl": "https://ark.cn-beijing.volces.com/api/v3"
     },

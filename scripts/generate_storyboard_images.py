@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Generate storyboard grid images and split into individual cells.
+"""Generate storyboard images - one image per cell (shot).
 
 Uses style reference and character reference images for consistency.
+Each cell (镜头) generates ONE individual image, no grid splitting.
 """
 
 import argparse
-import io
 import json
 import re
 import sys
@@ -13,12 +13,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-from PIL import Image
-
 from utils.api_client import ImageAPIClient
 from utils.config_loader import ConfigLoader, ConfigError
 from utils.logger import setup_logger
-from utils.prompt_optimizer import PromptOptimizer, calculate_grid_layout, calculate_grid_size, parse_video_ratio
+from utils.prompt_optimizer import parse_video_ratio
 
 
 @dataclass
@@ -45,7 +43,6 @@ class Asset:
 class GenerationResult:
     shot_number: int
     success: bool
-    grid_path: Optional[Path] = None
     cell_paths: list[Path] = field(default_factory=list)
     error: Optional[str] = None
 
@@ -162,8 +159,35 @@ class AssetIndexLoader:
         return relevant
 
 
+def calculate_cell_size(video_ratio: tuple[int, int]) -> str:
+    """Calculate image size for a single cell matching video ratio.
+
+    Volcengine minimum: 3,686,400 pixels.
+    For 9:16 ratio: 1440 x 2560 = 3,686,400.
+    For 16:9 ratio: 2560 x 1440 = 3,686,400.
+    """
+    w_ratio, h_ratio = video_ratio
+    min_pixels = 3686400
+
+    # Calculate dimensions that satisfy min pixels with correct ratio
+    if w_ratio >= h_ratio:
+        # Landscape or square
+        height = int((min_pixels * h_ratio / w_ratio) ** 0.5)
+        height = (height + 63) // 64 * 64  # Round to 64
+        width = int(height * w_ratio / h_ratio)
+        width = (width + 63) // 64 * 64
+    else:
+        # Portrait
+        width = int((min_pixels * w_ratio / h_ratio) ** 0.5)
+        width = (width + 63) // 64 * 64
+        height = int(width * h_ratio / w_ratio)
+        height = (height + 63) // 64 * 64
+
+    return f"{width}x{height}"
+
+
 class StoryboardImageGenerator:
-    """Main generator for storyboard images."""
+    """Main generator for storyboard images - one image per cell."""
 
     def __init__(self, project_path: Path, api: ImageAPIClient, logger, video_ratio=(16, 9), art_style=""):
         self.project_path = Path(project_path)
@@ -173,6 +197,7 @@ class StoryboardImageGenerator:
         self.art_style = art_style
         self.images_dir = self.project_path / "storyboard" / "images"
         self.images_dir.mkdir(parents=True, exist_ok=True)
+        self.cell_size = calculate_cell_size(video_ratio)
 
     def generate(self, storyboard_file: str, segment: Optional[int] = None) -> list[GenerationResult]:
         storyboard_path = self.project_path / "storyboard" / storyboard_file
@@ -201,20 +226,17 @@ class StoryboardImageGenerator:
 
         results = []
         for shot in shots:
-            result = self._generate_shot_grid(shot, asset_index, style_ref)
+            result = self._generate_shot_cells(shot, asset_index, style_ref)
             results.append(result)
 
         return results
 
-    def _generate_shot_grid(self, shot: Shot, asset_index: dict, style_ref: Optional[str]) -> GenerationResult:
+    def _generate_shot_cells(self, shot: Shot, asset_index: dict, style_ref: Optional[str]) -> GenerationResult:
         cell_count = len(shot.cells)
         if cell_count == 0:
             return GenerationResult(shot_number=shot.number, success=False, error="No cells")
 
-        cols, rows, total, _ = calculate_grid_layout(cell_count)
-        size = calculate_grid_size(cols, rows, self.video_ratio)
-
-        self.logger.info(f"Shot {shot.number}: {cell_count} cells ({cols}x{rows}), size={size}")
+        self.logger.info(f"Shot {shot.number}: {cell_count} cells, size={self.cell_size}")
 
         # Find relevant assets
         loader = AssetIndexLoader(self.project_path / "assets", self.logger)
@@ -232,72 +254,36 @@ class StoryboardImageGenerator:
             except Exception as e:
                 self.logger.warning(f"Failed to load asset {asset.name}: {e}")
 
-        # Build prompt
-        style_str = f"类型：{self.project_path.name}，风格：{self.art_style}"
-        aspect_str = f"{self.video_ratio[0]}:{self.video_ratio[1]}"
+        cell_paths = []
+        for idx, cell_prompt in enumerate(shot.cells):
+            cell_num = idx + 1
+            try:
+                self.logger.info(f"  Generating cell {cell_num}/{cell_count}...")
+                img_bytes = self.api.generate(
+                    prompt=cell_prompt,
+                    size=self.cell_size,
+                    reference_images=reference_images[:10] if reference_images else None,
+                )
 
-        optimizer = PromptOptimizer(style_str, aspect_str)
-        optimized = optimizer.optimize(shot.cells)
+                cell_path = self.images_dir / f"片段{shot.segment}-分镜{shot.number}-镜头{cell_num}.jpg"
+                cell_path.write_bytes(img_bytes)
+                self.logger.info(f"  Saved: {cell_path.name}")
+                cell_paths.append(cell_path)
 
-        prompt = optimized["prompt"]
-        grid_cols = optimized["grid_layout"]["cols"]
-        grid_rows = optimized["grid_layout"]["rows"]
+            except Exception as e:
+                self.logger.error(f"  Cell {cell_num} failed: {e}")
 
-        # Generate grid
-        try:
-            self.logger.info(f"  Generating grid image...")
-            img_bytes = self.api.generate(
-                prompt=prompt,
-                size=size,
-                reference_images=reference_images[:10] if reference_images else None,
-            )
-
-            grid_path = self.images_dir / f"片段{shot.segment}-分镜{shot.number}-宫格.jpg"
-            grid_path.write_bytes(img_bytes)
-            self.logger.info(f"  Grid saved: {grid_path}")
-
-            # Split into individual cells
-            cell_paths = self._split_grid(img_bytes, grid_cols, grid_rows, shot.segment, shot.number)
-
-            return GenerationResult(
-                shot_number=shot.number,
-                success=True,
-                grid_path=grid_path,
-                cell_paths=cell_paths,
-            )
-
-        except Exception as e:
-            self.logger.error(f"  Generation failed: {e}")
-            return GenerationResult(shot_number=shot.number, success=False, error=str(e))
-
-    def _split_grid(self, grid_bytes: bytes, cols: int, rows: int, segment: int, shot_num: int) -> list[Path]:
-        """Split grid image into individual cell images."""
-        img = Image.open(io.BytesIO(grid_bytes))
-        img_width, img_height = img.size
-        cell_width = img_width // cols
-        cell_height = img_height // rows
-
-        paths = []
-        idx = 0
-        for row in range(rows):
-            for col in range(cols):
-                left = col * cell_width
-                upper = row * cell_height
-                right = left + cell_width
-                lower = upper + cell_height
-
-                cell = img.crop((left, upper, right, lower))
-                cell_path = self.images_dir / f"片段{segment}-分镜{shot_num}-镜头{idx+1}.jpg"
-                cell.save(cell_path, "JPEG", quality=95)
-                paths.append(cell_path)
-                idx += 1
-
-        self.logger.info(f"  Split into {len(paths)} cells")
-        return paths
+        success = len(cell_paths) == cell_count
+        return GenerationResult(
+            shot_number=shot.number,
+            success=success,
+            cell_paths=cell_paths,
+            error=None if success else f"{cell_count - len(cell_paths)} cells failed",
+        )
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Generate storyboard images")
+    parser = argparse.ArgumentParser(description="Generate storyboard images (one per cell)")
     parser.add_argument("--project", "-p", type=str, required=True, help="Project directory")
     parser.add_argument("--storyboard", "-s", type=str, default="storyboard-01.md", help="Storyboard filename")
     parser.add_argument("--segment", type=int, default=None, help="Segment number to process")
@@ -335,10 +321,11 @@ def main() -> int:
         logger.error(str(e))
         return 1
 
-    success = sum(1 for r in results if r.success)
-    logger.info(f"\nCompleted: {success}/{len(results)} shots successful")
+    total_cells = sum(len(r.cell_paths) for r in results)
+    success_shots = sum(1 for r in results if r.success)
+    logger.info(f"\nCompleted: {success_shots}/{len(results)} shots, {total_cells} images generated")
 
-    return 0 if success == len(results) else 1
+    return 0 if success_shots == len(results) else 1
 
 
 if __name__ == "__main__":
