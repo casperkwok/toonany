@@ -1,8 +1,62 @@
-# Toonany
+# Toonany — AI 漫剧创作助手
 
 **Any story, any style, anyone.**
 
-Toonany 是一个 Claude Code Skill，帮助任何人将小说或故事转化为 AI 生成的漫剧（短剧）。无论你是新手还是专业创作者，都能快速产出高质量的视觉叙事内容。
+[![ClawHub](https://img.shields.io/badge/ClawHub-Install-blue)](https://clawhub.ai/casperkwok/toonany)
+
+Toonany 是一个 [Claude Code Skill](https://clawhub.ai/casperkwok/toonany)，帮助任何人将小说或故事转化为 AI 生成的漫剧（短剧/动画）。无论你是新手还是专业创作者，都能快速产出高质量的视觉叙事内容。
+
+> **核心理念**: 任何故事 × 任何风格 × 任何人 = 一部漫剧。
+>
+> 从一段文字到一段带配音、字幕、背景音乐的成片，最快 30 分钟。
+
+---
+
+## 适用场景
+
+- **网文作者**: 将热门章节转化为短视频内容，引流涨粉
+- **自媒体运营**: 批量生产小说推文视频，多平台分发
+- **独立创作者**: 低成本实现个人动画/短剧创作
+- **教育/培训**: 将教案、案例转化为生动的视频教材
+- **品牌营销**: 用故事化视频传递品牌理念
+
+## 完整工作流
+
+```
+小说原文
+    ↓
+故事线 (storyline) —— 核心情节脉络
+    ↓
+分集大纲 (outline) —— 每集场景拆分
+    ↓
+资产提取 (assets) —— 角色、场景、道具定义
+    ↓
+风格样张 (style-sample) —— 视觉锚点确认
+    ↓
+剧本 (script) —— 对白、旁白、镜头描述
+    ↓
+分镜 (storyboard) —— 镜头序列 + 画面描述
+    ↓
+分镜图 (storyboard-image) —— AI 生成每帧画面
+    ↓
+视频 (video) —— 图片转动态视频
+    ↓
+音频/字幕 (audio) —— AI 配音 + 自动字幕
+    ↓
+后期合成 (finalize) —— 拼接 + 混音 + 字幕烧录
+    ↓
+成片输出 🎬
+```
+
+## 核心设计原则
+
+| 原则 | 说明 |
+|------|------|
+| **风格锚定** | 批量生成前先确认风格样张，杜绝风格漂移 |
+| **角色一致** | 四视图参考图 + seed 锁定，跨集不变脸 |
+| **变更传播** | 修改上游自动提示下游重算，避免版本错乱 |
+| **质量校验** | 自动检查角色名一致性、场景一致性、风格一致性 |
+| **新手友好** | 缺什么补什么，不会卡住，全程引导 |
 
 ## 特点
 
@@ -112,9 +166,35 @@ A: Toonany 有依赖追踪机制。修改上游文件后，执行 `/toonany vali
 | 视频 | 可灵 / 豆包 | 支持多种生成模式 |
 | 音频 | 豆包 TTS | 音色丰富，支持情感 |
 
+## 安装方式
+
+### 通过 ClawHub 安装（推荐）
+
+在 Claude Code 中执行：
+
+```bash
+clawhub install toonany
+```
+
+或直接访问 👉 **[clawhub.ai/casperkwok/toonany](https://clawhub.ai/casperkwok/toonany)** 安装。
+
+### 手动安装
+
+将本仓库克隆到 `~/.claude/skills/toonany/` 目录：
+
+```bash
+git clone https://github.com/casperkwok/toonany.git ~/.claude/skills/toonany
+```
+
 ## 了解更多
 
-- [详细教程](TUTORIAL.md) - 完整使用指南
+- [详细教程](TUTORIAL.md) — 完整使用指南
 - [数据模型](references/data-model.md)
 - [生产流程](references/workflow.md)
 - [模型配置](references/model-config.md)
+- [命令参考](references/commands.md)
+
+---
+
+**ClawHub**: [clawhub.ai/casperkwok/toonany](https://clawhub.ai/casperkwok/toonany)  
+**GitHub**: [github.com/casperkwok/toonany](https://github.com/casperkwok/toonany)
