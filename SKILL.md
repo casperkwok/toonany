@@ -1,7 +1,7 @@
 ---
 name: toonany
 description: A Claude Code skill for creating AI-generated short dramas (漫剧) from novels and stories. Use when user mentions "漫剧创作", "小说转剧本", "分镜生成", "短剧制作", "故事线生成", "大纲创作", "AI视频", or wants to produce video content from written stories. Activates for tasks involving novel-to-drama conversion, script writing, storyboarding, or complete video production workflows.
-version: 1.1.0
+version: "1.1.0"
 metadata:
   openclaw:
     requires:
